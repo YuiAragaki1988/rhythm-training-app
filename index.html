@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rhythm Training</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&family=Baloo+2:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/tone@latest/build/Tone.js"></script>
+<style>
+body {
+  background: #fafafa;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+}
+.header-rainbow {
+  display: flex; justify-content: center;
+  margin-top: 1.2rem; margin-bottom: 0.4em;
+  font-size: 2.2rem;
+  font-family: 'Baloo 2', 'Montserrat', 'Segoe UI', Arial, sans-serif;
+  letter-spacing: 0.08em; font-weight: 900; user-select: none;
+}
+.header-rainbow span {
+  display: inline-block;
+  transition: transform .19s;
+  text-shadow: 0 3px 12px #fff7, 0 1px 2px #0002;
+  border-radius: .14em; padding: 0 .04em;
+}
+.header-rainbow span:hover {
+  transform: scale(1.15) rotate(-4deg);
+  filter: brightness(1.08) saturate(1.2);
+}
+#controls {
+  margin: 0 0 0.3rem 0;
+  display: flex; gap: 1.5rem; align-items: center;
+  position: relative;
+  z-index: 2;
+}
+#controls label, #controls select, #controls button { font-size: 1.08rem;}
+#controls button {
+  background: linear-gradient(90deg,#29b6f6 0%,#8e24aa 100%);
+  color: #fff; font-weight: bold; border: none; border-radius: 1em;
+  padding: 0.5em 1.6em; cursor: pointer;
+}
+#controls button:hover {
+  background: linear-gradient(90deg,#0288d1 0%,#ad1457 100%);
+}
+#beats-area {
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 200px;
+  position: relative;
+  margin: 0;
+}
+#change-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100vw;
+  margin: 1.2em 0 1.1em 0;
+  z-index: 20;
+}
+#predict {
+  display: flex; justify-content: center; align-items: center;
+  gap: 0; opacity: 0; font-size: 2.45rem; font-weight: 900; letter-spacing: 0.13em;
+  font-family: 'Baloo 2', 'Montserrat', 'Segoe UI', Arial, sans-serif;
+  user-select: none; pointer-events:none;
+  text-shadow: 0 3px 18px #fff7, 0 1px 3px #0002;
+  transition: opacity .19s;
+  background: #fafafaeb;
+  border-radius: .28em;
+  padding: 0 .22em;
+  min-width: 5.2em;
+  min-height: 1.4em;
+  box-shadow: 0 1.5px 8px #aaa3;
+}
+#predict.show { opacity: 1; }
+#beats {
+  display: flex; flex-direction: row; justify-content: center; align-items: end;
+  gap: 2.2rem;
+  margin-bottom: 1.7rem; width: 100%;
+  margin-top: 0.7em;
+  z-index: 1;
+  transition: margin-top .3s;
+}
+.beat {
+  display: flex; flex-direction: column; align-items: center; min-width: 75px;
+}
+.num {
+  font-size: 2.2rem; font-weight: 700; background: #fff; border-radius: 50%; border: 3.3px solid #111; color: #222;
+  width: 2.2em; height: 2.2em; display: flex; align-items: center; justify-content: center; margin-bottom: 0.38em;
+  transition: background .18s, color .11s, border .18s, box-shadow .18s, transform .16s;
+  box-shadow: 0 3px 12px #aaa2, 0 1.5px 2px #0001; user-select: none;
+}
+.beat.active .num { background: #14e158; border-color: #111; color: #fff; box-shadow: 0 6px 26px #00e67633; transform: scale(1.18);}
+.label { font-size: 1.06rem; color: #7b7b7b; margin-top: -.13em;}
+@media (max-width: 650px) {
+  .header-rainbow {font-size:1.3rem;}
+  #beats { gap: 1rem; margin-top: 0.5em;}
+  .num { font-size: 1.1rem; width:1.1em; height:1.1em; }
+  #change-wrapper { margin: 0.6em 0 0.8em 0;}
+  #predict { font-size: 1.1rem;}
+  #controls {padding:.3em .6em .4em .6em;}
+}
+</style>
+</head>
+<body>
+<div class="header-rainbow" id="rainbow-title"></div>
+<div id="controls">
+  <label for="bpm">BPM: <input id="bpm" type="number" value="100" min="30" max="300" style="width:70px"></label>
+  <label for="mode-select">Pattern Change:
+    <select id="mode-select">
+      <option value="2m" selected>Pattern changes every 2 bars</option>
+      <option value="1m">Pattern changes every bar</option>
+    </select>
+  </label>
+  <button id="toggle">Start</button>
+</div>
+<div id="beats-area">
+  <div id="change-wrapper"><div id="predict"></div></div>
+  <div id="beats">
+    <div class="beat"><div class="num">-</div><div class="label">Beat 1</div></div>
+    <div class="beat"><div class="num">-</div><div class="label">Beat 2</div></div>
+    <div class="beat"><div class="num">-</div><div class="label">Beat 3</div></div>
+    <div class="beat"><div class="num">-</div><div class="label">Beat 4</div></div>
+  </div>
+</div>
+<script>
+// タイトル：Rhythm Trainingを虹の7色×2に
+const colors = [
+  "#ff5c5c", // 赤
+  "#ffaf36", // オレンジ
+  "#ffe057", // 黄色
+  "#a5e85f", // 黄緑
+  "#27db90", // 緑
+  "#36b8ff", // 青
+  "#b47aff"  // 紫
+];
+const text = "Rhythm Training";
+const header = document.getElementById("rainbow-title");
+[...text].forEach((char, i) => {
+  const span = document.createElement("span");
+  span.style.color = colors[i % 7];
+  span.textContent = char;
+  header.appendChild(span);
+});
+
+// クリック音
+let clickStrong, clickWeak;
+function createSynths(){
+  clickStrong = new Tone.Synth({
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.002, decay: 0.07, sustain: 0, release: 0.06 }
+  }).toDestination();
+  clickStrong.volume.value = 0;
+  clickWeak = new Tone.Synth({
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.002, decay: 0.04, sustain: 0, release: 0.04 }
+  }).toDestination();
+  clickWeak.volume.value = -9;
+}
+createSynths();
+
+const beats = Array.from(document.querySelectorAll(".beat"));
+const nums  = Array.from(document.querySelectorAll(".num"));
+const predict = document.getElementById("predict");
+const modeSelect = document.getElementById("mode-select");
+
+function setChangeRainbow() {
+  // "Change!" を虹色に1文字ずつ
+  const txt = "Change!";
+  predict.innerHTML = "";
+  [...txt].forEach((char, i) => {
+    const span = document.createElement("span");
+    span.textContent = char;
+    span.style.color = colors[i % 7];
+    span.style.fontFamily = "'Baloo 2', 'Montserrat', 'Segoe UI', Arial, sans-serif";
+    span.style.marginRight = ".02em";
+    predict.appendChild(span);
+  });
+}
+setChangeRainbow();
+
+let pattern = [];
+let running=false;
+let handle = null;
+let interval = "2m";
+let phraseLen = 8;
+let subPerBeat = 4; // 16分音符単位
+
+function newPattern(old){
+  let p;
+  do {
+    p = Array.from({length:4},()=>[1,2,3,4][Math.floor(Math.random()*4)]);
+  } while(JSON.stringify(p)===JSON.stringify(old));
+  return p;
+}
+function startPattern(){
+  pattern = newPattern(pattern);
+  nums.forEach((n,i)=>n.textContent=pattern[i]);
+  beats.forEach(b=>b.classList.remove("active"));
+  predict.classList.remove("show");
+}
+function clearPatternUI() {
+  nums.forEach(n=>n.textContent="-");
+  beats.forEach(b=>b.classList.remove("active"));
+  predict.classList.remove("show");
+}
+
+function scheduleBeatEngine(){
+  if(handle) Tone.Transport.clear(handle);
+  interval = modeSelect.value;
+  phraseLen = (interval==="2m"?8:4); // 拍数
+  startPattern();
+  let subIdx = 0;
+  let totalSubs = phraseLen*subPerBeat;
+
+  // 完全均等間隔で回す。Change!表示開始/終了タイミングだけ調整
+  handle = Tone.Transport.scheduleRepeat(time=>{
+    let beatIdx = Math.floor(subIdx/subPerBeat)%4;
+    let subInBeat = subIdx%subPerBeat;
+    let inPhrase = subIdx<totalSubs;
+    let subdiv = Number(nums[beatIdx].textContent);
+
+    // 拍頭
+    if(subInBeat===0 && inPhrase){
+      Tone.Draw.schedule(()=>{
+        beats.forEach((b,i)=>b.classList.toggle("active",i===beatIdx));
+      },time);
+      clickStrong.triggerAttackRelease("C6", 0.09, time);
+    }
+    // サブクリック
+    if(subInBeat<subdiv && inPhrase){
+      if(subInBeat!==0){
+        clickWeak.triggerAttackRelease("C6",0.07,time);
+      }
+    }
+
+    // Change!の開始・終了タイミング
+    // 小節末から5つ前で表示開始、1つ前で消す
+    let changeStartIdx = totalSubs - 5;
+    let changeEndIdx = totalSubs - 1;
+    if (subIdx === changeStartIdx) {
+      Tone.Draw.schedule(()=>{
+        setChangeRainbow();
+        predict.classList.add("show");
+      },time);
+    }
+    if (subIdx === changeEndIdx) {
+      Tone.Draw.schedule(()=>{
+        predict.classList.remove("show");
+      },time);
+    }
+
+    // パターンチェンジ（完全均等に、1つ目に戻すだけ）
+    if(subIdx === totalSubs-1){
+      startPattern();
+      subIdx = 0;
+    } else {
+      subIdx++;
+    }
+  }, "16n");
+}
+
+const toggle = document.getElementById("toggle");
+toggle.onclick=async()=>{
+  if(!running){
+    await Tone.start();
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    createSynths();
+    Tone.Transport.bpm.value=+bpm.value;
+    clearPatternUI();
+    scheduleBeatEngine();
+    Tone.Transport.start("+0.05");
+    toggle.textContent="Stop"; running=true;
+    modeSelect.disabled = true;
+  }else{
+    Tone.Transport.stop();
+    clearPatternUI();
+    toggle.textContent="Start"; running=false;
+    if(handle) Tone.Transport.clear(handle);
+    modeSelect.disabled = false;
+    Tone.Transport.cancel();
+  }
+};
+modeSelect.onchange = ()=>{
+  if(running){
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    createSynths();
+    clearPatternUI();
+    scheduleBeatEngine();
+    Tone.Transport.start("+0.05");
+  }
+};
+bpm.onchange = ()=>{
+  if(running){
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    createSynths();
+    Tone.Transport.bpm.value=+bpm.value;
+    clearPatternUI();
+    scheduleBeatEngine();
+    Tone.Transport.start("+0.05");
+  }
+};
+</script>
+</body>
+</html>
